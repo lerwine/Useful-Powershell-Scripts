@@ -1,0 +1,50 @@
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">
+  <Obj RefId="0">
+    <TN RefId="0">
+      <T>Deserialized.System.Collections.Hashtable</T>
+      <T>Deserialized.System.Object</T>
+    </TN>
+    <DCT>
+      <En>
+        <S N="Key">Module</S>
+        <Obj N="Value" RefId="1">
+          <TNRef RefId="0" />
+          <DCT>
+            <En>
+              <S N="Key">ModuleName</S>
+              <S N="Value">powershell_puppet_psm</S>
+            </En>
+            <En>
+              <S N="Key">Version</S>
+              <S N="Value">0.1.0</S>
+            </En>
+            <En>
+              <S N="Key">UserName</S>
+              <S N="Value">platinumStorm</S>
+            </En>
+          </DCT>
+        </Obj>
+      </En>
+      <En>
+        <S N="Key">System</S>
+        <Obj N="Value" RefId="2">
+          <TNRef RefId="0" />
+          <DCT>
+            <En>
+              <S N="Key">ModulePath</S>
+              <S N="Value">/etc/puppetlabs/puppet/modules</S>
+            </En>
+            <En>
+              <S N="Key">PuppetPath</S>
+              <S N="Value">/usr/local/bin/puppet</S>
+            </En>
+            <En>
+              <S N="Key">WorkingDir</S>
+              <S N="Value">~/puppet_dev</S>
+            </En>
+          </DCT>
+        </Obj>
+      </En>
+    </DCT>
+  </Obj>
+</Objs>
