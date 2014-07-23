@@ -1,0 +1,877 @@
+Add-Type -Assembly "Microsoft.Office.Interop.Outlook" | Out-Null;
+
+Function Get-HasMatchesInString {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Text,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ParentDescription,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$PropertyName
+    )
+    
+    Begin {
+        $matches = @();
+    }
+    
+    Process {
+    }
+    
+    End {
+        if ($matches.Count -gt 0) {
+            @('', ('In {0} ({1}) - {2} [{3}]:' -f $MAPIFolder.Name, $MAPIFolder.FullFolderPath, $ParentDescription, $PropertyName)) | Write-Output;
+            $matches | Write-Output;
+        }
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210899(v=office.11).aspx
+Function Get-MatchesInAppointmentItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$AppointmentItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+    # todo: $AppointmentItem.Attachments
+    
+    $itemDescription = 'Appointment {0}: {1}' -f $AppointmentItem.EntryID, $AppointmentItem.Subject;
+    
+    $matches = @();
+
+    $result = $AppointmentItem.BillingInformation | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Billing Information';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $AppointmentItem.Body | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Body';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $AppointmentItem.Companies | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Companies';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $AppointmentItem.Location | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Location';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $AppointmentItem.OptionalAttendees | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Optional Attendees';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $AppointmentItem.Organizer | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Organizer';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($AppointmentItem.Recipients.Count -gt 0) {
+        $result = $AppointmentItem.Recipients | Get-MatchesInRecipient -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Recipients';
+        if ($result -ne $null) { $matches = $matches + $result }
+    }
+    
+    if ($AppointmentItem.RequiredAttendees.Count -gt 0) {
+        $result = $AppointmentItem.RequiredAttendees | Get-MatchesInRecipient -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Required Attendees';
+        if ($result -ne $null) { $matches = $matches + $result }
+    }
+    
+    $result = $AppointmentItem.Resources | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Resources';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $AppointmentItem.Subject | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Subject';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($matches.Count -gt 0) {
+        @(('', '{0} total matches in {1} ({2}) - {3}:' -f $matches.Count, $MAPIFolder.Name, $MAPIFolder.FullFolderPath, $itemDescription)) | Write-Output;
+        $matches | Write-Output;
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa211006(v=office.11).aspx
+Function Get-MatchesInRecipient {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
+        [object]$Recipient,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ParentDescription,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$PropertyName
+    )
+    
+    Begin {
+        $matches = @();
+    }
+    
+    Process {
+        $itemDescription = '{0} > Recipient {1}: {2} ({3})' -f $ParentDescription, $Recipient.EntryID, $Recipient.Name, $Recipient.Address;
+        
+        $matches = @();
+
+        # todo: AddressEntry
+        
+        $result = $Recipient.Address | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Address';
+        if ($result -ne $null) { $matches = $matches + $result }
+        
+        $result = $Recipient.Name | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Name';
+        if ($result -ne $null) { $matches = $matches + $result }
+    }
+    
+    End {
+        if ($matches.Count -gt 0) {
+            @('', ('In {0} ({1}) - {2} [{3}]:' -f $MAPIFolder.Name, $MAPIFolder.FullFolderPath, $ParentDescription, $PropertyName)) | Write-Output;
+            $matches | Write-Output;
+        }
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210907(v=office.11).aspx
+Function Get-MatchesInContactItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$ContactItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+    $itemDescription = 'Contact {0}: {1}' -f $ContactItem.EntryID, $ContactItem.FileAs;
+    
+    $matches = @();
+
+    $result = $ContactItem.AssistantName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Assistant Name';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.BillingInformation | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Billing Information';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Body | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Body';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.BusinessAddress | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Business Address';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.BusinessAddressCity | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Business Address City';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $ContactItem.BusinessAddressCountry | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Business Address Country';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.BusinessAddressPostalCode | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Business Address Postal Code';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.BusinessAddressPostOfficeBox | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Business Address Post Office Box';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.BusinessAddressState | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Business Address State';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.BusinessAddressStreet | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Business Address Street';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.BusinessHomePage | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Business Home Page';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Children | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Children';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Companies | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Companies';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.CompanyAndFullName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'CompanyAndFullName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.CompanyLastFirstNoSpace | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'CompanyLastFirstNoSpace';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.CompanyLastFirstSpaceOnly | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'CompanyLastFirstSpaceOnly';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.CompanyName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'CompanyName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.ConversationTopic | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ConversationTopic';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.CustomerID | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'CustomerID';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Department | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Department';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Email1Address | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Email1Address';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Email1DisplayName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Email1DisplayName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Email2Address | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Email2Address';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Email2DisplayName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Email2DisplayName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Email3Address | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Email3Address';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Email3DisplayName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Email3DisplayName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.FileAs | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'FileAs';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.FirstName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'FirstName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.FTPSite | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'FTPSite';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.FullName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'FullName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.FullNameAndCompany | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'FullNameAndCompany';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.GovernmentIDNumber | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'GovernmentIDNumber';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Hobby | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Hobby';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.HomeAddress | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'HomeAddress';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.HomeAddressCity | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'HomeAddressCity';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.HomeAddressCountry | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'HomeAddressCountry';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.HomeAddressPostalCode | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'HomeAddressPostalCode';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.HomeAddressPostOfficeBox | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'HomeAddressPostOfficeBox';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.HomeAddressState | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'HomeAddressState';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.HomeAddressStreet | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'HomeAddressStreet';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.IMAddress | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'IMAddress';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Initials | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Initials';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.InternetFreeBusyAddress | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'InternetFreeBusyAddress';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.ISDNNumber | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ISDNNumber';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.JobTitle | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'JobTitle';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.LastFirstAndSuffix | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'LastFirstAndSuffix';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.LastFirstNoSpace | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'LastFirstNoSpace';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.LastFirstNoSpaceAndSuffix | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'LastFirstNoSpaceAndSuffix';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.LastFirstNoSpaceCompany | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'LastFirstNoSpaceCompany';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.LastFirstSpaceOnly | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'LastFirstSpaceOnly';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.LastFirstSpaceOnlyCompany | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'LastFirstSpaceOnlyCompany';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.LastName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'LastName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.LastNameAndFirstName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'LastNameAndFirstName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.MailingAddress | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MailingAddress';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.MailingAddressCity | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MailingAddressCity';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.MailingAddressCountry | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MailingAddressCountry';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.MailingAddressPostalCode | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MailingAddressPostalCode';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.MailingAddressPostOfficeBox | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MailingAddressPostOfficeBox';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.MailingAddressState | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MailingAddressState';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.MailingAddressStreet | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MailingAddressStreet';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.ManagerName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ManagerName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.MiddleName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MiddleName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.NetMeetingAlias | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'NetMeetingAlias';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.NickName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'NickName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OfficeLocation | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OfficeLocation';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OrganizationalIDNumber | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OrganizationalIDNumber';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OtherAddress | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OtherAddress';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OtherAddressCity | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OtherAddressCity';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OtherAddressCountry | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OtherAddressCountry';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OtherAddressPostalCode | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OtherAddressPostalCode';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OtherAddressPostOfficeBox | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OtherAddressPostOfficeBox';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OtherAddressState | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OtherAddressState';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.OtherAddressStreet | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'OtherAddressStreet';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.PersonalHomePage | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'PersonalHomePage';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Profession | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Profession';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.ReferredBy | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ReferredBy';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Spouse | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Spouse';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Subject | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Subject';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Suffix | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Suffix';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.Title | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Title';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.User1 | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'User1';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.User2 | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'User2';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.User3 | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'User3';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.User4 | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'User4';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.WebPage | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'WebPage';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.YomiCompanyName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'YomiCompanyName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.YomiFirstName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'YomiFirstName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $ContactItem.YomiLastName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'YomiLastName';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    # todo: Attachments
+    
+    if ($matches.Count -gt 0) {
+        @(('', '{0} total matches in {1} ({2}) - {3}:' -f $matches.Count, $MAPIFolder.Name, $MAPIFolder.FullFolderPath, $itemDescription)) | Write-Output;
+        $matches | Write-Output;
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210909(v=office.11).aspx
+Function Get-MatchesInDistListItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$DistListItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+    $itemDescription = 'Distribution List {0}: {1} ({2})' -f $DistListItem.EntryID, $DistListItem.Subject, $DistListItem.DLName;
+    
+    $matches = @();
+
+    # todo: Attachments
+    
+    $result = $DistListItem.BillingInformation | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'BillingInformation';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $DistListItem.Body | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Body';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $DistListItem.Companies | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Companies';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $DistListItem.ConversationTopic | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ConversationTopic';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $DistListItem.DLName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'DLName';
+    if ($result -ne $null) { $matches = $matches + $result }
+
+    $result = $DistListItem.Subject | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Subject';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($matches.Count -gt 0) {
+        @(('', '{0} total matches in {1} ({2}) - {3}:' -f $matches.Count, $MAPIFolder.Name, $MAPIFolder.FullFolderPath, $itemDescription)) | Write-Output;
+        $matches | Write-Output;
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210936(v=office.11).aspx
+Function Get-MatchesInJournalItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$JournalItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+    $itemDescription = 'Journal {0}: {1}' -f $JournalItem.EntryID, $JournalItem.Subject;
+    
+    $matches = @();
+
+    # todo: Attachments
+    
+    $result = $JournalItem.BillingInformation | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'BillingInformation';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $JournalItem.Body | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Body';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $JournalItem.Companies | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Companies';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $JournalItem.ContactNames | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ContactNames';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $JournalItem.ConversationTopic | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ConversationTopic';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($JournalItem.Recipients.Count -gt 0) {
+        $result = $JournalItem.Recipients | Get-MatchesInRecipient -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Recipients';
+        if ($result -ne $null) { $matches = $matches + $result }
+    }
+    
+    $result = $JournalItem.Subject | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Subject';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($matches.Count -gt 0) {
+        @(('', '{0} total matches in {1} ({2}) - {3}:' -f $matches.Count, $MAPIFolder.Name, $MAPIFolder.FullFolderPath, $itemDescription)) | Write-Output;
+        $matches | Write-Output;
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210946(v=office.11).aspx
+Function Get-MatchesInMailItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$MailItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+    $itemDescription = 'Mail {0}: {1}' -f $MailItem.EntryID, $MailItem.Subject;
+    
+    $matches = @();
+
+    # todo: Attachments
+    
+    $result = $MailItem.BCC | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'BCC';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.BillingInformation | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'BillingInformation';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.Body | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Body';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.CC | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'CC';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.Companies | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Companies';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.ConversationTopic | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ConversationTopic';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.HTMLBody | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'HTMLBody';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.ReceivedByName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ReceivedByName';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.ReceivedOnBehalfOfName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ReceivedOnBehalfOfName';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($MailItem.Recipients.Count -gt 0) {
+        $result = $MailItem.Recipients | Get-MatchesInRecipient -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Recipients';
+        if ($result -ne $null) { $matches = $matches + $result }
+    }
+    
+    $result = $MailItem.ReplyRecipientNames | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ReplyRecipientNames';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($MailItem.ReplyRecipients.Count -gt 0) {
+        $result = $MailItem.ReplyRecipients | Get-MatchesInRecipient -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ReplyRecipients';
+        if ($result -ne $null) { $matches = $matches + $result }
+    }
+    
+    $result = $MailItem.SenderEmailAddress | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'SenderEmailAddress';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.SenderName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'SenderName';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.SentOnBehalfOfName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'SentOnBehalfOfName';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MailItem.Subject | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Subject';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($matches.Count -gt 0) {
+        @(('', '{0} total matches in {1} ({2}) - {3}:' -f $matches.Count, $MAPIFolder.Name, $MAPIFolder.FullFolderPath, $itemDescription)) | Write-Output;
+        $matches | Write-Output;
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210951(v=office.11).aspx
+Function Get-MatchesInMeetingItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$MeetingItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+    $itemDescription = 'Mail {0}: {1}' -f $MeetingItem.EntryID, $MeetingItem.Subject;
+    
+    $matches = @();
+
+    # todo: Attachments
+    
+    $result = $MeetingItem.BillingInformation | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'BillingInformation';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MeetingItem.Body | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Body';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MeetingItem.Companies | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Companies';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MeetingItem.ConversationTopic | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ConversationTopic';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MeetingItem.MeetingWorkspaceURL | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'MeetingWorkspaceURL';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($MeetingItem.Recipients.Count -gt 0) {
+        $result = $MeetingItem.Recipients | Get-MatchesInRecipient -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Recipients';
+        if ($result -ne $null) { $matches = $matches + $result }
+    }
+    
+    if ($MeetingItem.ReplyRecipients.Count -gt 0) {
+        $result = $MeetingItem.ReplyRecipients | Get-MatchesInRecipient -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'ReplyRecipients';
+        if ($result -ne $null) { $matches = $matches + $result }
+    }
+    
+    $result = $MeetingItem.SenderEmailAddress | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'SenderEmailAddress';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MeetingItem.SenderName | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'SenderName';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    $result = $MeetingItem.Subject | Get-HasMatchesInString -MAPIFolder:$MAPIFolder -ParentDescription:$itemDescription -PropertyName;'Subject';
+    if ($result -ne $null) { $matches = $matches + $result }
+    
+    if ($matches.Count -gt 0) {
+        @(('', '{0} total matches in {1} ({2}) - {3}:' -f $matches.Count, $MAPIFolder.Name, $MAPIFolder.FullFolderPath, $itemDescription)) | Write-Output;
+        $matches | Write-Output;
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210956(v=office.11).aspx
+Function Get-MatchesInNoteItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$NoteItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210983(v=office.11).aspx
+Function Get-MatchesInPostItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$PostItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa211033(v=office.11).aspx
+Function Get-MatchesInRemoteItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$RemoteItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa211038(v=office.11).aspx
+Function Get-MatchesInReportItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$ReportItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa211067(v=office.11).aspx
+Function Get-MatchesInTaskItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$TaskItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa211069(v=office.11).aspx
+Function Get-MatchesInTaskRequestAcceptItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$TaskRequestAcceptItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa211079(v=office.11).aspx
+Function Get-MatchesInTaskRequestDeclineItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$TaskRequestDeclineItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa211086(v=office.11).aspx
+Function Get-MatchesInTaskRequestItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$TaskRequestItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa211090(v=office.11).aspx
+Function Get-MatchesInTaskRequestUpdateItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [object]$TaskRequestUpdateItem,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+}
+
+Function Get-MatchesInItem {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
+        [object]$ItemObject,
+        
+        [Parameter(Mandatory = $true)]
+        [object]$MAPIFolder
+    )
+    
+    Process {
+        if ($ItemObject -ne $null) {
+            switch ($ItemObject) {
+                { $_ -is [Microsoft.Office.Interop.Outlook.AppointmentItem] } {
+                        Get-MatchesInAppointmentItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.ContactItem] } {
+                        Get-MatchesInContactItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.DistListItem] } {
+                        Get-MatchesInDistListItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                # todo: [Microsoft.Office.Interop.Outlook.DocumentItem] - http://msdn.microsoft.com/en-us/library/office/aa210910(v=office.11).aspx
+                { $_ -is [Microsoft.Office.Interop.Outlook.JournalItem] } {
+                        Get-MatchesInJournalItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.MailItem] } {
+                        Get-MatchesInMailItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.MeetingItem] } {
+                        Get-MatchesInMeetingItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.NoteItem] } {
+                        Get-MatchesInNoteItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.PostItem] } {
+                        Get-MatchesInPostItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.RemoteItem] } {
+                        Get-MatchesInRemoteItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.ReportItem] } {
+                        Get-MatchesInReportItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.TaskItem] } {
+                        Get-MatchesInTaskItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.TaskRequestAcceptItem] } {
+                        Get-MatchesInTaskRequestAcceptItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.TaskRequestDeclineItem] } {
+                        Get-MatchesInTaskRequestDeclineItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.TaskRequestItem] } {
+                        Get-MatchesInTaskRequestItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+                { $_ -is [Microsoft.Office.Interop.Outlook.TaskRequestUpdateItem] } {
+                        Get-MatchesInTaskRequestUpdateItem $ItemObject -MAPIFolder:$MAPIFolder;
+                        break;
+                    }
+            }
+        }
+    }
+}
+
+# http://msdn.microsoft.com/en-us/library/office/aa210948(v=office.11).aspx
+Function Get-MatchesInFolder {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
+        [object]$MAPIFolder
+    )
+    
+    Process {
+        if ($MAPIFolder -ne $null -and $MAPIFolder.Store.ExchangeStoreType -ne [Microsoft.Office.Interop.Outlook.OlExchangeStoreType]::olExchangePublicFolder) {
+            Write-Progress -Activity:"Searching folders" -Status:('Searching {0} items in {1} ({2})' -f ($MAPIFolder.Items.Count + $MAPIFolder.Folders.Count), $MAPIFolder.Name, $MAPIFolder.FullFolderPath);
+            $matches = @();
+            if ($MAPIFolder.Items.Count -gt 0) {
+                $result = $MAPIFolder.Items | Get-MatchesInItem -MAPIFolder:$MAPIFolder;
+                if ($result -ne $null) { $matches = $matches + $result }
+            }
+            if ($MAPIFolder.Folders.Count -gt 0) {
+                $result = $MAPIFolder.Folders | Get-MatchesInFolder;
+                if ($result -ne $null) { $matches = $matches + $result }
+            }
+            
+            if ($matches.Count -gt 0) {
+                $matches = $matcheds + @(('{0} total Matches found in {1} ({2})' -f $matches.Count, $MAPIFolder.Name, $MAPIFolder.FullFolderPath), '');
+                $matches | Write-Output;
+            }
+        }
+    }
+}
+
+$applicationObject = New-Object -ComObject Outlook.Application;
+$namespaceObject = $outlook.GetNamespace("MAPI");
+
+# todo: Process $namespaceObject.AddressLists
+
+if ($namespaceObject.Folders.Count -eq 0) {
+    "No folders found" | Write-Warning;
+} else {
+    Write-Progress -Activity:"Searching folders" -Status:('Searching {0} top-level folders' -f $namespaceObject.Folders.Count);
+    $namespaceObject.Folders | Get-MatchesInFolder;
+}
